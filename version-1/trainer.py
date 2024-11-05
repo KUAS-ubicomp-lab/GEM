@@ -31,15 +31,12 @@ def train(device, learning_rate, decay_factor, mpc_data_loader, filtered_data_lo
             total_loss += pretrain_depression_detection(model, data, depression_criterion, optimizer)
             print(f"Pretrain Epoch {epoch + 1}/{epochs}, Depression Loss: {total_loss / len(data):.4f}")
         print("Pretraining Complete.")
+
         print("Fine-tuning for Severity Classification...")
-        if filter_data:
-            for data in filtered_data_loader:
-                total_loss += fine_tune_severity_classification(model, data, severity_criterion, optimizer)
-                print(f"Fine-tune Epoch {epoch + 1}/{epochs}, Severity Loss: {total_loss / len(data):.4f}")
-        else:
-            for data in severity_data_loader:
-                total_loss += fine_tune_severity_classification(model, data, severity_criterion, optimizer)
-                print(f"Fine-tune Epoch {epoch + 1}/{epochs}, Severity Loss: {total_loss / len(data):.4f}")
+        data_loader = filtered_data_loader if filter_data else severity_data_loader
+        for data in data_loader:
+            total_loss += fine_tune_severity_classification(model, data, severity_criterion, optimizer)
+            print(f"Fine-tune Epoch {epoch + 1}/{epochs}, Severity Loss: {total_loss / len(data):.4f}")
         print("Fine-tuning Complete.")
 
     avg_loss = total_loss / len(utterances)
@@ -48,7 +45,10 @@ def train(device, learning_rate, decay_factor, mpc_data_loader, filtered_data_lo
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle, utterances = training_args()
+    utterances = []
+    severity_data_samples = []
+
+    batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle = training_args()
 
     mpc_data_list = [MPCGraph.create_mpc_graph(sample, device=device) for sample in utterances]
     mpc_data_loader = DataLoader(mpc_data_list, batch_size=batch_size, shuffle=shuffle)

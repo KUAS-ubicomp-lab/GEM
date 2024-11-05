@@ -60,9 +60,8 @@ def create_severity_data(severity_samples, device):
 def training_args():
     learning_rate = 1e-3
     decay_factor = 1e-4
-    utterances = []
     filter_data = False
     batch_size = 32
     shuffle = True
     epochs = 50
-    return batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle, utterances
+    return batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle
