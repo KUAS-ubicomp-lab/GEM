@@ -1,3 +1,6 @@
+import torch
+from torch_geometric.data import Data
+
 from mpc_to_graph import MPCGraph
 
 
@@ -38,3 +41,17 @@ def filter_depressed_utterances(data):
     filtered_data = MPCGraph.create_mpc_graph(x=data.x[depressed_mask], edge_index=data.edge_index[:, depressed_mask], device=data.device)
     filtered_data.y_severity = data.y_severity[depressed_mask]
     return filtered_data
+
+
+def create_severity_data(severity_samples, device):
+    data_list = []
+    for sample in severity_samples:
+        utterance_vector = torch.rand((16,)).to(device)
+        y_severity = sample['severity_label']
+
+        x = utterance_vector.unsqueeze(0).to(device)
+        y_severity = torch.tensor(y_severity, dtype=torch.long).unsqueeze(0).to(device)
+
+        data_list.append(Data(x=x, y_severity=y_severity))
+
+    return data_list
