@@ -1,3 +1,6 @@
+import os
+
+import pandas as pd
 import torch
 from torch_geometric.data import Data
 
@@ -65,3 +68,13 @@ def training_args():
     shuffle = True
     epochs = 50
     return batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle
+
+
+def load_data(source, text, label_1, label_2=None):
+    extracted_data = {}
+    for root, _, files in os.walk(source):
+        for file in files:
+            data = pd.read_csv(os.path.join(root, file))
+            extracted_data[file.split('.')[0]] = [data[text].tolist(), data[label_1].tolist(),
+                                               data[label_2].tolist() if label_2 else []]
+    return extracted_data
