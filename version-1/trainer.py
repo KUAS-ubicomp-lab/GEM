@@ -7,7 +7,7 @@ from torch_geometric.data import DataLoader
 
 from GAT_MTL import GAT_MTL_Model
 from MTL_utils import pretrain_depression_detection, fine_tune_severity_classification, filter_depressed_utterances, \
-    training_args, create_severity_data
+    training_args, create_severity_data, load_data
 from mpc_to_graph import MPCGraph
 
 logger = logging.getLogger()
@@ -16,7 +16,8 @@ logger = logging.getLogger()
 def train(device, learning_rate, decay_factor, mpc_data_loader, filtered_data_loader, severity_data_loader, utterances,
           filter_data, epochs):
     # Initialize model, optimizer, and criteria
-    in_features, hidden_dim, lstm_hidden_dim, out_features = 16, 32, 64, 4
+    in_features = [MPCGraph.extract_features(utterance=utterance) for utterance in utterances]
+    hidden_dim, lstm_hidden_dim, out_features = 32, 64, 4
     model = GAT_MTL_Model(in_features, hidden_dim, lstm_hidden_dim, out_features)
     model.to(device)
     depression_criterion = nn.BCELoss()
@@ -45,20 +46,26 @@ def train(device, learning_rate, decay_factor, mpc_data_loader, filtered_data_lo
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    utterances = []
-    severity_data_samples = []
+
+    input_mpc_depressed_data_list, input_mpc_non_depressed_data_list = (
+        list(load_data(source='mpc_data', text='tweet', label_1='conversation_id', label_2='user_id').values()))
+    # utterances = input_mpc_depressed_data_list, input_mpc_non_depressed_data_list
+    utterances = ["I'm feeling down lately.", "It's been tough.", "I don't feel like myself.", "I'm just tired."]
+    severity_data_samples = list(load_data(source='severity_data', text='text', label_1='label').values())
 
     batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle = training_args()
 
-    mpc_data_list = [MPCGraph.create_mpc_graph(sample, device=device) for sample in utterances]
-    mpc_data_loader = DataLoader(mpc_data_list, batch_size=batch_size, shuffle=shuffle)
+    mpc_graph = MPCGraph()
+    mpc_hierarchical_graph = mpc_graph.create_hierarchical_graph(conversations=utterances, device=device)
+    mpc_data_graph = [mpc_graph.create_mpc_graph(sample, device=device) for sample in mpc_hierarchical_graph]
+    mpc_data_loader = DataLoader(mpc_data_graph, batch_size=batch_size, shuffle=shuffle)
 
     print("Filtering for Depressed Utterances...")
-    filtered_data = [data_filter for data_filter in mpc_data_list if filter_depressed_utterances(data_filter)]
+    filtered_data = [data_filter for data_filter in mpc_data_graph if filter_depressed_utterances(data_filter)]
     filtered_data_loader = DataLoader(filtered_data, batch_size=batch_size, shuffle=shuffle)
 
     print("Creating Severity data...")
-    severity_data_list = create_severity_data(severity_data_samples)
+    severity_data_list = create_severity_data(severity_samples=severity_data_samples, device=device)
     severity_data_loader = DataLoader(severity_data_list, batch_size=batch_size, shuffle=shuffle)
 
     train(device=device,

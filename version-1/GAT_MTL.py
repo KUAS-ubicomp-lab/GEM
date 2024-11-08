@@ -1,53 +1,46 @@
 import torch
 import torch.nn as nn
 from torch_geometric.nn import GATConv
+from transformers import AutoModel
 
 
 class GAT_MTL_Model(nn.Module):
-    def __init__(self, in_features, hidden_dim, lstm_hidden_dim, out_features, num_heads=4):
+    def __init__(self, hidden_channels, lstm_hidden_size, num_classes_binary, num_classes_severity, num_heads=2):
         super(GAT_MTL_Model, self).__init__()
 
-        # GAT Layers
-        self.gat1 = GATConv(in_features, hidden_dim, heads=num_heads, concat=True)
-        self.gat2 = GATConv(hidden_dim * num_heads, hidden_dim, heads=1, concat=True)
+        self.num_heads = num_heads
+        self.bert_model = AutoModel.from_pretrained("bert-base-uncased")
+        self.hidden_size = self.bert_model.config.hidden_size
 
-        # LSTM layer to capture sequential dependencies after GAT
-        self.lstm = nn.LSTM(hidden_dim, lstm_hidden_dim, batch_first=True, bidirectional=True)
+        # Hierarchical GAT with different edge types (root-sub, sub-sub)
+        self.gat1 = GATConv(self.hidden_size + hidden_channels, hidden_channels, num_relations=2, residual=True)
+        self.gat2 = GATConv(hidden_channels, hidden_channels, num_relations=2, residual=True)
 
-        self.depression_head = nn.Sequential(
-            nn.Linear(2 * lstm_hidden_dim, hidden_dim),  # 2 for bidirectional LSTM output
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        )
+        # LSTM for sequence modeling
+        self.lstm = nn.LSTM(hidden_channels, lstm_hidden_size, batch_first=True, bidirectional=True)
 
-        self.severity_head = nn.Sequential(
-            nn.Linear(2 * lstm_hidden_dim, hidden_dim),  # 2 for bidirectional LSTM output
-            nn.ReLU(),
-            nn.Linear(hidden_dim, out_features)
-        )
+        self.binary_fc = nn.Linear(2 * lstm_hidden_size, num_classes_binary)
+        self.severity_fc = nn.Linear(2 * lstm_hidden_size, num_classes_severity)
 
-        # Activation and dropout
-        self.relu = nn.ReLU()
+        self.relu = nn.LeakyReLU()
         self.dropout = nn.Dropout(0.3)
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
+        # Obtain discourse-aware embeddings with BERT
+        bert_output = self.bert_model(data.input_ids, attention_mask=data.attention_mask)
+        discourse_features = bert_output.last_hidden_state[:, 0, :]  # [CLS] token embedding for each utterance
 
-        # GAT layers
-        x = self.gat1(x, edge_index)
-        x = self.relu(x)
-        x = self.dropout(x)
+        x = torch.cat([discourse_features, data.root_depth_embeddings], dim=1)
 
-        x = self.gat2(x, edge_index)
-        x = self.relu(x)
-        x = self.dropout(x)
+        x = self.gat1(x, data.edge_index, data.edge_type)
+        x = nn.LeakyReLU(x)
+        x = self.gat2(x, data.edge_index, data.edge_type)
 
-        x = x.view(batch.size(0), -1, x.size(1))
-        lstm_out, _ = self.lstm(x)
-        lstm_out = lstm_out[:, -1, :]
+        x = x.unsqueeze(0)  # Add batch dimension
+        _, (h_n, _) = self.lstm(x)
+        h_n = h_n.transpose(0, 1).contiguous().view(-1, 2 * h_n.size(2))
 
-        # Task-specific outputs
-        depression_output = torch.sigmoid(self.depression_head(lstm_out))
-        severity_output = torch.softmax(self.severity_head(lstm_out), dim=1)
+        binary_out = self.binary_fc(h_n)
+        severity_out = self.severity_fc(h_n)
 
-        return depression_output, severity_output
+        return binary_out, severity_out

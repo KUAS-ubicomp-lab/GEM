@@ -41,7 +41,8 @@ def fine_tune_severity_classification(model, data, severity_criterion, optimizer
 def filter_depressed_utterances(data):
     # The model's data includes a way to filter for depressed utterances
     depressed_mask = data.depressed_mask
-    filtered_data = MPCGraph.create_mpc_graph(x=data.x[depressed_mask], edge_index=data.edge_index[:, depressed_mask], device=data.device)
+    filtered_data = MPCGraph.create_mpc_graph(x=data.x[depressed_mask], edge_index=data.edge_index[:, depressed_mask],
+                                              device=data.device)
     filtered_data.y_severity = data.y_severity[depressed_mask]
     return filtered_data
 
@@ -76,5 +77,5 @@ def load_data(source, text, label_1, label_2=None):
         for file in files:
             data = pd.read_csv(os.path.join(root, file))
             extracted_data[file.split('.')[0]] = [data[text].tolist(), data[label_1].tolist(),
-                                               data[label_2].tolist() if label_2 else []]
+                                                  data[label_2].tolist() if label_2 else []]
     return extracted_data

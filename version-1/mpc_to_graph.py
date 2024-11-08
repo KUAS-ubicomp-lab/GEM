@@ -8,6 +8,7 @@ class MPCGraph(Data):
         super(MPCGraph, self).__init__()
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.bert_model = BertModel.from_pretrained('bert-base-uncased')
+        self.hidden_size = self.bert_model.config.hidden_size
 
     def create_hierarchical_graph(self, conversations, device):
         """
@@ -18,20 +19,19 @@ class MPCGraph(Data):
         edge_type = []
         utterance_id_to_idx = {}
 
-        for conversation in conversations:
-            for idx, utterance in enumerate(conversation):
-                utterance_embedding = self.encode_utterance(utterance['text'])
-                node_features.append(utterance_embedding)
-                utterance_id_to_idx[utterance['utterance_id']] = len(node_features) - 1
+        for idx, utterance in enumerate(conversations):
+            utterance_embedding = self.encode_utterance(utterance)
+            node_features.append(utterance_embedding)
+            utterance_id_to_idx[utterance] = len(node_features) - 1
 
-                # Create edges based on root-sub and sub-sub relationships
-                parent_id = utterance.get('parent_id')
-                if parent_id:
-                    # Root-Sub or Sub-Sub connection
-                    parent_idx = utterance_id_to_idx.get(parent_id)
-                    if parent_idx is not None:
-                        edge_index.append([parent_idx, len(node_features) - 1])  # Directed edge
-                        edge_type.append(0 if idx == 0 else 1)  # 0 for root-sub, 1 for sub-sub
+            # Create edges based on root-sub and sub-sub relationships
+            parent_id = utterance_id_to_idx.get(idx)
+            if parent_id:
+                # Root-Sub or Sub-Sub connection
+                parent_idx = utterance_id_to_idx.get(parent_id)
+                if parent_idx is not None:
+                    edge_index.append([parent_idx, len(node_features) - 1])  # Directed edge
+                    edge_type.append(0 if idx == 0 else 1)  # 0 for root-sub, 1 for sub-sub
 
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(device=device)
         edge_type = torch.tensor(edge_type, dtype=torch.long).to(device=device)
@@ -77,3 +77,13 @@ class MPCGraph(Data):
         if cls_embedding.size(1) != self.hidden_size:
             cls_embedding = cls_embedding[:, :self.hidden_size]
         return cls_embedding.squeeze(0)
+
+    def extract_features(self, utterance):
+        token_embedding = self.encode_utterance(utterance['text'])
+        speaker_embedding = torch.zeros(4)
+        if 'speaker' in utterance:
+            speaker_id = hash(utterance['speaker']) % 4
+            speaker_embedding[speaker_id] = 1
+
+        feature_vector = torch.cat((token_embedding, speaker_embedding), dim=0)
+        return feature_vector
