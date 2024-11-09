@@ -15,58 +15,56 @@ class MPCGraph(Data):
         Convert MPC data into a graph structure with root-sub and sub-sub level edges.
          """
         node_features = []
+        node_labels = []
         edge_index = []
         edge_type = []
         utterance_id_to_idx = {}
 
-        for idx, utterance in enumerate(conversations):
-            utterance_embedding = self.encode_utterance(utterance)
-            node_features.append(utterance_embedding)
-            utterance_id_to_idx[utterance] = len(node_features) - 1
+        for conversation in conversations:
+            for idx, utterance in enumerate(conversation):
+                utterance_embedding = self.encode_utterance(utterance['text'])
+                node_features.append(utterance_embedding)
 
-            # Create edges based on root-sub and sub-sub relationships
-            parent_id = utterance_id_to_idx.get(idx)
-            if parent_id:
-                # Root-Sub or Sub-Sub connection
-                parent_idx = utterance_id_to_idx.get(parent_id)
-                if parent_idx is not None:
-                    edge_index.append([parent_idx, len(node_features) - 1])  # Directed edge
-                    edge_type.append(0 if idx == 0 else 1)  # 0 for root-sub, 1 for sub-sub
+                depression_label = utterance.get('depression_label', 0)
+                node_labels.append(depression_label)
+
+                current_node_idx = len(node_features) - 1
+                utterance_id_to_idx[utterance['utterance_id']] = current_node_idx
+
+                parent_id = utterance.get('parent_id')
+                if parent_id:
+                    # Root-Sub or Sub-Sub connection
+                    parent_idx = utterance_id_to_idx.get(parent_id)
+                    if parent_idx is not None:
+                        # Create root-sub (edge type 0) or sub-sub (edge type 1) edge
+                        edge_index.append([parent_idx, current_node_idx])
+                        edge_type.append(0 if idx == 0 else 1)
+
+                # Additional Speaker and Temporal Relationships edge types (edge type 2 and 3)
+                self.create_mpc_graph(conversation, current_node_idx, edge_index, edge_type, idx, utterance,
+                                      utterance_id_to_idx)
 
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(device=device)
         edge_type = torch.tensor(edge_type, dtype=torch.long).to(device=device)
         node_features = torch.stack(node_features).to(device=device)
+        node_labels = torch.tensor(node_labels, dtype=torch.long).to(device=device)
 
-        return Data(x=node_features, edge_index=edge_index, edge_type=edge_type)
+        return Data(x=node_features, edge_index=edge_index, edge_type=edge_type, y=node_labels)
 
-    def create_mpc_graph(self, conversation_data, device):
-        num_utterances = len(conversation_data)
-        node_features, edge_index, y_depression = [], [], []
+    def create_mpc_graph(self, conversation, current_node_idx, edge_index, edge_type, idx, utterance,
+                         utterance_id_to_idx):
+        for other_utterance in conversation[:idx]:
+            if other_utterance['speaker'] == utterance['speaker']:
+                # Same-speaker relationship (edge type 2)
+                other_idx = utterance_id_to_idx[other_utterance['utterance_id']]
+                edge_index.append([other_idx, current_node_idx])
+                edge_type.append(2)
 
-        for i, utterance_data in enumerate(conversation_data):
-            utterance_vector = self.embed_utterance(utterance_data['utterance']).to(device=device)
-            node_features.append(utterance_vector)
-            y_depression.append(utterance_data['depression_label'])
-
-            # Temporal edges
-            if i < num_utterances - 1:
-                edge_index.append([i, i + 1])
-                edge_index.append([i + 1, i])
-
-            # Speaker relationship edges
-            for j in range(i + 1, num_utterances):
-                if conversation_data[j]['speaker_id'] == utterance_data['speaker_id']:
-                    edge_index.append([i, j])
-                    edge_index.append([j, i])
-
-        x = torch.stack(node_features).to(device=device)
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous().to(device=device)
-        y_depression = torch.tensor(y_depression, dtype=torch.float).to(device=device)
-
-        return Data(x=x, edge_index=edge_index, y_depression=y_depression)
-
-    def embed_utterance(self, utterance):
-        return torch.rand((16,))
+            # Temporal proximity (edge type 3)
+            if abs(utterance['timestamp'] - other_utterance['timestamp']) < 5:
+                other_idx = utterance_id_to_idx[other_utterance['utterance_id']]
+                edge_index.append([other_idx, current_node_idx])
+                edge_type.append(3)
 
     def encode_utterance(self, text):
         inputs = self.tokenizer(text, return_tensors='pt', truncation=True, padding='max_length', max_length=128)

@@ -50,14 +50,22 @@ def main():
     input_mpc_depressed_data_list, input_mpc_non_depressed_data_list = (
         list(load_data(source='mpc_data', text='tweet', label_1='conversation_id', label_2='user_id').values()))
     # utterances = input_mpc_depressed_data_list, input_mpc_non_depressed_data_list
-    utterances = ["I'm feeling down lately.", "It's been tough.", "I don't feel like myself.", "I'm just tired."]
+    utterances = [
+        [
+            {'utterance_id': 'u1', 'text': 'Feeling down today.', 'parent_id': None, 'speaker': 'A', 'timestamp': 1,
+             'depression_label': 1},
+            {'utterance_id': 'u2', 'text': 'I understand. Do you want to talk about it?', 'parent_id': 'u1',
+             'speaker': 'B', 'timestamp': 2, 'depression_label': 0},
+            {'utterance_id': 'u3', 'text': 'Yes, it just feels overwhelming.', 'parent_id': 'u1', 'speaker': 'A',
+             'timestamp': 3, 'depression_label': 1},
+        ]
+    ]
     severity_data_samples = list(load_data(source='severity_data', text='text', label_1='label').values())
 
     batch_size, decay_factor, epochs, filter_data, learning_rate, shuffle = training_args()
 
     mpc_graph = MPCGraph()
-    mpc_hierarchical_graph = mpc_graph.create_hierarchical_graph(conversations=utterances, device=device)
-    mpc_data_graph = [mpc_graph.create_mpc_graph(sample, device=device) for sample in mpc_hierarchical_graph]
+    mpc_data_graph = mpc_graph.create_hierarchical_graph(conversations=utterances, device=device)
     mpc_data_loader = DataLoader(mpc_data_graph, batch_size=batch_size, shuffle=shuffle)
 
     print("Filtering for Depressed Utterances...")
