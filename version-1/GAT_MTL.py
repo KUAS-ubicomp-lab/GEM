@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from torch_geometric.nn import GATConv
 from transformers import AutoModel, AutoTokenizer
@@ -36,11 +35,7 @@ class GAT_MTL_Model(nn.Module):
         x = self.relu(self.fc_shared(x))
         x = self.dropout(self.fc_shared(x))
 
-        x = x.unsqueeze(0)
-        _, (h_n, _) = self.lstm(x)
-        h_n = h_n.transpose(0, 1).contiguous().view(-1, 2 * h_n.size(2))
-
-        out_depression = self.binary_fc(h_n)
-        out_severity = self.severity_fc(h_n)
+        out_depression = self.binary_fc(x)
+        out_severity = self.severity_fc(x)
 
         return out_depression, out_severity

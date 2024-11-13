@@ -1,6 +1,5 @@
 import logging
 
-import torch
 import torch.optim as optim
 from torch import nn
 from torch_geometric.data import DataLoader
@@ -16,17 +15,16 @@ logger = logging.getLogger()
 def train(model, learning_rate, decay_factor, mpc_data_loader, filtered_data_loader, severity_data_loader,
           utterances,
           filter_data, epochs):
-    depression_criterion = nn.BCELoss()
+    depression_criterion = nn.CrossEntropyLoss()
     severity_criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), learning_rate=learning_rate, weight_decay=decay_factor)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=decay_factor)
     model.train()
 
     total_loss = 0
     for epoch in range(epochs):
-        for data in mpc_data_loader:
-            print("Starting Pretraining for Depression Detection...")
-            total_loss += pretrain_depression_detection(model, data, depression_criterion, optimizer)
-            print(f"Pretrain Epoch {epoch + 1}/{epochs}, Depression Loss: {total_loss / len(data):.4f}")
+        print("Starting Pretraining for Depression Detection...")
+        total_loss += pretrain_depression_detection(model, mpc_data_loader, depression_criterion, optimizer)
+        print(f"Pretrain Epoch {epoch + 1}/{epochs}, Depression Loss: {total_loss / len(mpc_data_loader):.4f}")
         print("Pretraining Complete.")
 
         print("Fine-tuning for Severity Classification...")
@@ -74,14 +72,17 @@ def main():
     filtered_data_loader = DataLoader(filtered_data, batch_size=batch_size, shuffle=shuffle)
 
     print("Creating Severity data...")
-    severity_samples = list(load_data(source='severity_data', text='text', label_1='label').values())
-    severity_data_list = create_severity_data(severity_samples=severity_samples, device=device)
+    samples = list(load_data(source='severity_data', text='text', label_1='label').values())[0]
+    severity_samples = list(zip(samples[0], samples[1]))
+
+    severity_data_list = create_severity_data(severity_samples=severity_samples,
+                                              device=device)
     severity_data_loader = DataLoader(severity_data_list, batch_size=batch_size, shuffle=shuffle)
 
     train(model=model,
           learning_rate=learning_rate,
           decay_factor=decay_factor,
-          mpc_data_loader=mpc_data_loader,
+          mpc_data_loader=mpc_data_graph,
           filtered_data_loader=filtered_data_loader,
           severity_data_loader=severity_data_loader,
           utterances=utterances,
