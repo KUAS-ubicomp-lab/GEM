@@ -22,15 +22,14 @@ def pretrain_depression_detection(model, data, depression_criterion, optimizer):
 
 def fine_tune_severity_classification(model, data, severity_criterion, optimizer):
     optimizer.zero_grad()
-    depressed_data = filter_depressed_utterances(data)  # Filtered data using your framework’s output
-    _, severity_output = model(depressed_data)
-    severity_label = depressed_data.y_severity  # Severity labels only for depressed utterances
+    _, severity_output = model.forward(data)
+    severity_label = data.y
 
     # Calculate severity classification loss
     loss = severity_criterion(severity_output, severity_label)
 
     # Backward pass and optimize
-    loss.backward()
+    loss.backward(retain_graph=True)
     optimizer.step()
 
     return loss.item()
@@ -50,7 +49,7 @@ def create_severity_data(severity_samples, device):
         utterance_vector = torch.rand((16,)).to(device)
         y_severity = severity_mapper(sample[1])
 
-        x = utterance_vector.unsqueeze(0).to(device)
+        x = utterance_vector.unsqueeze(0).to(device=device)
         y_severity = torch.tensor(y_severity, dtype=torch.long).unsqueeze(0).to(device)
 
         data_list.append(Data(x=x, y_severity=y_severity))

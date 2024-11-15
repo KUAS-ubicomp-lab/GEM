@@ -21,21 +21,18 @@ def train(model, learning_rate, decay_factor, mpc_data_loader, filtered_data_loa
     model.train()
 
     total_loss = 0
+    print("Starting MTL Pipeline for Depression Detection...")
     for epoch in range(epochs):
-        print("Starting Pretraining for Depression Detection...")
         total_loss += pretrain_depression_detection(model, mpc_data_loader, depression_criterion, optimizer)
-        print(f"Pretrain Epoch {epoch + 1}/{epochs}, Depression Loss: {total_loss / len(mpc_data_loader):.4f}")
-        print("Pretraining Complete.")
+        print(f"Epoch {epoch + 1}/{epochs}, Depression Loss: {total_loss / len(mpc_data_loader):.4f}")
 
-        print("Fine-tuning for Severity Classification...")
-        data_loader = filtered_data_loader if filter_data else severity_data_loader
-        for data in data_loader:
-            total_loss += fine_tune_severity_classification(model, data, severity_criterion, optimizer)
-            print(f"Fine-tune Epoch {epoch + 1}/{epochs}, Severity Loss: {total_loss / len(data):.4f}")
-        print("Fine-tuning Complete.")
+        severity_loader = filtered_data_loader if filter_data else severity_data_loader
+        total_loss += fine_tune_severity_classification(model, severity_loader, severity_criterion, optimizer)
+        print(f"Fine-tune Epoch {epoch + 1}/{epochs}, Severity Loss: {total_loss / len(severity_loader):.4f}")
 
     avg_loss = total_loss / len(utterances)
     logger.info("Average loss =%f", avg_loss)
+    print("Fine-tuning Complete.")
 
 
 def main():
@@ -65,11 +62,13 @@ def main():
 
     mpc_graph = MPCGraph()
     mpc_data_graph = mpc_graph.create_hierarchical_graph(conversations=utterances, device=device)
-    mpc_data_loader = DataLoader(mpc_data_graph, batch_size=batch_size, shuffle=shuffle)
+    DataLoader(mpc_data_graph, batch_size=batch_size, shuffle=shuffle)
 
     print("Filtering for Depressed Utterances...")
-    filtered_data = filter_depressed_utterances(data=mpc_data_graph, model=model, threshold=0.5)
-    filtered_data_loader = DataLoader(filtered_data, batch_size=batch_size, shuffle=shuffle)
+    filtered_data_graph = filter_depressed_utterances(data=mpc_data_graph, model=model, threshold=0.5)
+    if filtered_data_graph:
+        filter_data = True
+    DataLoader(filtered_data_graph, batch_size=batch_size, shuffle=shuffle)
 
     print("Creating Severity data...")
     samples = list(load_data(source='severity_data', text='text', label_1='label').values())[0]
@@ -77,14 +76,14 @@ def main():
 
     severity_data_list = create_severity_data(severity_samples=severity_samples,
                                               device=device)
-    severity_data_loader = DataLoader(severity_data_list, batch_size=batch_size, shuffle=shuffle)
+    DataLoader(severity_data_list, batch_size=batch_size, shuffle=shuffle)
 
     train(model=model,
           learning_rate=learning_rate,
           decay_factor=decay_factor,
           mpc_data_loader=mpc_data_graph,
-          filtered_data_loader=filtered_data_loader,
-          severity_data_loader=severity_data_loader,
+          filtered_data_loader=filtered_data_graph,
+          severity_data_loader=severity_data_list,
           utterances=utterances,
           filter_data=filter_data,
           epochs=epochs)
