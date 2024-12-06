@@ -1,1 +1,6 @@
-# <B> GEM </B> <B> <I> Graph Attention Encoder for Multi-task Depression Severity Detection in Multi-party Conversations </B> </I>
+# <B> <I> GEM </I> </B>
+Graph Attention Encoder for Multi-task Depression Severity Detection in Multi-party Conversations
+
+# System Design 
+
+
