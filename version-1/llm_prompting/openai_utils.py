@@ -4,8 +4,14 @@ import os
 import openai
 import time
 from tqdm import tqdm
+from transformers import GPT2TokenizerFast
 
+_TOKENIZER = GPT2TokenizerFast.from_pretrained('gpt4')
 openai.api_key = os.getenv("")
+
+
+def length_of_prompt(prompt, max_tokens):
+    return len(_TOKENIZER.tokenize(prompt)) + max_tokens
 
 
 async def dispatch_openai_requests(
