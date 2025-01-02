@@ -1,0 +1,3 @@
+# <i>GEM</i>: Graph Attention Encoder for Multi-task Depression Severity Detection in Multi-party Conversations
+This repository contains the source code of the initial version of <i>GEM</i>, a graph attention network (GAT)-based multi-task learning (MTL) pipeline for depression detection and severity classification using multi-party conversation (MPC) data. By modeling utterances as graph nodes and leveraging hierarchical root-sub and sub-sub relationships, the shared GAT layers captured critical depression cues and speaker interactions. Task-specific layers refined the shared representations for both binary depression detection and severity classification, facilitating knowledge transfer across tasks.
+
