@@ -22,3 +22,16 @@ The training phase of the proposed GAT-based MTL pipeline determines depression 
   ```
 
 ## Downstream Tasks Formation
+Three downstream tasks, Depressed Utterance Detection (DUD), Depressed Interlocutor Recognition (DIR), and Depression Severity Classification (DSC), are formed based on the outputs of DDH and SCH.
+
+## LLM Prompting
+To evaluate DUD and DSC, MentalBERT and DisorBERT were used as 100M-300M-parameter LLMs and MentaLLaMA-7B and Mental-Alpaca were used as open-source 7B-parameter LLMs while GPT-4 was adopted as a closed-source 1.76T-parameter LLM. Run the following commands to facilitate the LLM prompting logic.
+  ```
+  cd llm_prompting/
+  python prompt.py
+  ```
+To evaluate the proposed GAT-based MTL pipeline with respect to sequential model baselines, graph-based baselines, and LLMs, run the following commands.
+  ```
+  cd llm_prompting/
+  python few_shot.py
+  ```
